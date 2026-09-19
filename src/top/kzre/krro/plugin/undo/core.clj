@@ -58,17 +58,23 @@
     (let [new-current (proto/undo current)]
       (if (identical? new-current current)
         project
-        (let [new-project (restore-state new-current)]
-          (letfn [(go [] (swap! proj/project (constantly new-project)))]
+        (let [new-project (restore-state new-current)
+              gone (atom false)]
+          (letfn [(go []
+                    (swap! proj/project (constantly new-project))
+                    (reset! gone true))]
             ;; 从当前节点 undo
             (if-let [fx (fx-type current)]
               (if-let [cmd (get-command fx)]
-                ((:undo-handler cmd)
-                 {:old-project project
-                  :new-project new-project
-                  :old-node current
-                  :new-node new-current}
-                 go)
+                (do
+                  ((:undo-handler cmd)
+                   {:old-project project
+                    :new-project new-project
+                    :old-node current
+                    :new-node new-current}
+                   go)
+                  (when-not @gone
+                    (throw (ex-info "undo callback must be called" {:fx-type fx}))))
                 (throw (ex-info "no command registered for fx-type" {:fx-type fx})))
               (go)))
           new-project)))
@@ -79,17 +85,22 @@
     (let [new-current (proto/redo current)]
       (if (identical? new-current current)
         project
-        (let [new-project (restore-state new-current)]
-          (letfn [(go [] (swap! proj/project (constantly new-project)))]
+        (let [new-project (restore-state new-current)
+              gone (atom false)]
+          (letfn [(go [] (swap! proj/project (constantly new-project))
+                    (reset! gone true))]
             ;; 从当前节点 undo
             (if-let [fx (fx-type new-current)]
               (if-let [cmd (get-command fx)]
-                ((:redo-handler cmd)
-                 {:old-project project
-                  :new-project new-project
-                  :old-node current
-                  :new-node new-current}
-                 go)
+                (do
+                  ((:redo-handler cmd)
+                   {:old-project project
+                    :new-project new-project
+                    :old-node current
+                    :new-node new-current}
+                   go)
+                  (when-not @gone
+                    (throw (ex-info "undo callback must be called" {:fx-type fx}))))
                 (throw (ex-info "no command registered for fx-type" {:fx-type fx})))
               (go)))
           new-project)))
